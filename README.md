@@ -4,11 +4,11 @@ This is the **starter** for a hands-on lab on dockerizing a microservices app.
 
 You're given a working application — two backend services, an Nginx config for a load balancer, and a static frontend — but **no Docker files**. Your task is to dockerize it step by step.
 
-➡️ **[Open LAB.md](./LAB.md) and start at Milestone 0.**
+➡️ **[Start the lab](./lab/README.md)**
 
 The complete reference implementation lives on the `solution` branch:
 
-```sh
+```bash
 git checkout solution                          # browse the full solution
 git checkout solution -- path/to/file          # grab one file
 git diff solution -- path/to/file              # compare yours to the solution
@@ -16,21 +16,16 @@ git diff solution -- path/to/file              # compare yours to the solution
 
 ## The app
 
-Two independent services, each meant to own its own MongoDB:
+- **`services/users-service/`** — Express + MongoDB. Manages users (name, email).
+- **`services/products-service/`** — Express + MongoDB. Manages products with atomic stock decrement (`POST /products/:id/buy`).
+- **`lb/nginx.conf`** — API gateway config: routes `/users/*` and `/products/*` to the right service.
+- **`frontend/`** — static HTML/CSS/JS app that calls `/api/users` and `/api/products`.
 
-- **`users-service`** (`services/users-service/`) — manages users (name, email)
-- **`products-service`** (`services/products-service/`) — manages products with atomic stock decrement (`POST /products/:id/buy`)
-
-Plus the pieces you'll wire into Docker through the lab:
-
-- **`lb/nginx.conf`** — API gateway config: routes `/users/*` to the users service, `/products/*` to the products service
-- **`frontend/`** — static HTML/CSS/JS app that calls `/api/users` and `/api/products`. Designed to be served by Nginx, with `/api/*` reverse-proxied to the LB
-
-## Project layout
+## Layout
 
 ```
 .
-├── LAB.md                       ← start here
+├── lab/                         ← lab instructions, one file per step
 ├── frontend/
 │   ├── nginx.conf
 │   └── public/index.html
