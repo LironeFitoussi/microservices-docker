@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microservices Demo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #1a1a1a;
+    }
+    h1 { margin-bottom: 0.25rem; }
+    p.lead { color: #555; margin-top: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      background: #fafafa;
+    }
+    .card h2 { margin-top: 0; font-size: 1.1rem; }
+    .users h2 { color: #2563eb; }
+    .products h2 { color: #16a34a; }
+    label { display: block; font-size: 0.85rem; color: #555; margin-top: 0.5rem; }
+    input {
+      width: 100%;
+      padding: 0.4rem 0.55rem;
+      font-size: 0.95rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.9rem;
+      border: 1px solid #333;
+      background: #fff;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    button:hover { background: #f0f0f0; }
+    .list {
+      list-style: none;
+      padding: 0;
+      margin: 1rem 0 0 0;
+      font-size: 0.85rem;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .list li {
+      padding: 0.4rem 0;
+      border-top: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .list li:first-child { border-top: none; }
+    .meta { color: #888; font-family: ui-monospace, monospace; font-size: 0.75rem; }
+    .actions { margin-left: auto; display: flex; gap: 0.3rem; }
+    .actions button { margin: 0; padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .log {
+      margin-top: 1.5rem;
+      background: #111;
+      color: #ddd;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .log .ok { color: #6ee7b7; }
+    .log .err { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <h1>Microservices Demo</h1>
+  <p class="lead">
+    Two independent services (<code>users</code> + <code>products</code>),
+    each with its own MongoDB. An Nginx API gateway routes by path.
+  </p>
+
+  <div class="grid">
+    <section class="card users">
+      <h2>users-service · mongo: users-db</h2>
+      <label>Name <input id="user-name" placeholder="Ada Lovelace" /></label>
+      <label>Email <input id="user-email" placeholder="ada@example.com" /></label>
+      <button type="button" id="user-add">Add user</button>
+      <button type="button" id="user-refresh">Refresh</button>
+      <ul id="users-list" class="list"></ul>
+    </section>
+
+    <section class="card products">
+      <h2>products-service · mongo: products-db</h2>
+      <label>Name <input id="product-name" placeholder="Widget" /></label>
+      <label>Price <input id="product-price" type="number" step="0.01" placeholder="9.99" /></label>
+      <label>Stock <input id="product-stock" type="number" placeholder="5" /></label>
+      <button type="button" id="product-add">Add product</button>
+      <button type="button" id="product-refresh">Refresh</button>
+      <ul id="products-list" class="list"></ul>
+    </section>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg, kind) {
+      const line = document.createElement('div');
+      line.className = kind || '';
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.prepend(line);
+    }
+
+    async function call(method, path, body) {
+      const opts = { method, headers: {} };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(`/api${path}`, opts);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = text; }
+      if (!res.ok) {
+        log(`${method} ${path} → ${res.status} ${JSON.stringify(data)}`, 'err');
+        const msg = (data && typeof data === 'object' && data.error) || res.statusText;
+        throw new Error(msg);
+      }
+      const service = (data && typeof data === 'object' && data.service) || '?';
+      log(`${method} ${path} → ${res.status} (${service})`, 'ok');
+      return data;
+    }
+
+    function el(tag, attrs = {}, children = []) {
+      const node = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') node.className = v;
+        else if (k.startsWith('data-')) node.setAttribute(k, v);
+        else if (k === 'onClick') node.addEventListener('click', v);
+        else node[k] = v;
+      }
+      for (const child of children) {
+        node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+      }
+      return node;
+    }
+
+    async function refreshUsers() {
+      const data = await call('GET', '/users');
+      const list = document.getElementById('users-list');
+      list.innerHTML = '';
+      for (const u of data.users) {
+        const deleteBtn = el('button', {
+          type: 'button',
+          onClick: async () => {
+            await call('DELETE', `/users/${u._id}`);
+            refreshUsers();
+          },
+        }, ['delete']);
+        const li = el('li', {}, [
+          el('span', {}, [
+            el('strong', {}, [u.name]),
+            ' ',
+            el('span', { class: 'meta' }, [u.email]),
+          ]),
+          el('div', { class: 'actions' }, [deleteBtn]),
+        ]);
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('user-add').addEventListener('click', async () => {
+      const name = document.getElementById('user-name').value.trim();
+      const email = document.getElementById('user-email').value.trim();
+      if (!name || !email) return log('name and email required', 'err');
+      await call('POST', '/users', { name, email });
+      document.getElementById('user-name').value = '';
+      document.getElementById('user-email').value = '';
+      refreshUsers();
+    });
+    document.getElementById('user-refresh').addEventListener('click', refreshUsers);
+
+    async function refreshProducts() {
+      const data = await call('GET', '/products');
+      const list = document.getElementById('products-list');
+      list.innerHTML = '';
+      for (const p of data.products) {
+        const buyBtn = el('button', {
+          type: 'button',
+          onClick: () => {
+            call('POST', `/products/${p._id}/buy`).finally(refreshProducts);
+          },
+        }, ['buy']);
+        const deleteBtn = el('button', {
+          type: 'button',
+          onClick: async () => {
+            await call('DELETE', `/products/${p._id}`);
+            refreshProducts();
+          },
+        }, ['delete']);
+        const li = el('li', {}, [
+          el('span', {}, [
+            el('strong', {}, [p.name]),
+            ' ',
+            el('span', { class: 'meta' }, [`$${p.price.toFixed(2)} · stock ${p.stock}`]),
+          ]),
+          el('div', { class: 'actions' }, [buyBtn, deleteBtn]),
+        ]);
+        list.appendChild(li);
+      }
+    }
+
+    document.getElementById('product-add').addEventListener('click', async () => {
+      const name = document.getElementById('product-name').value.trim();
+      const price = parseFloat(document.getElementById('product-price').value);
+      const stock = parseInt(document.getElementById('product-stock').value, 10) || 0;
+      if (!name || isNaN(price)) return log('name and numeric price required', 'err');
+      await call('POST', '/products', { name, price, stock });
+      document.getElementById('product-name').value = '';
+      document.getElementById('product-price').value = '';
+      document.getElementById('product-stock').value = '';
+      refreshProducts();
+    });
+    document.getElementById('product-refresh').addEventListener('click', refreshProducts);
+
+    refreshUsers().catch(() => {});
+    refreshProducts().catch(() => {});
+  </script>
+</body>
+</html>

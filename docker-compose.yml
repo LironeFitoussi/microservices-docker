@@ -1,0 +1,59 @@
+services:
+  users-db:
+    image: mongo:7
+    volumes:
+      - users-db-data:/data/db
+    networks:
+      - app
+
+  products-db:
+    image: mongo:7
+    volumes:
+      - products-db-data:/data/db
+    networks:
+      - app
+
+  users-service:
+    build: ./services/users-service
+    environment:
+      MONGO_URI: mongodb://users-db:27017
+    depends_on:
+      - users-db
+    networks:
+      - app
+
+  products-service:
+    build: ./services/products-service
+    environment:
+      MONGO_URI: mongodb://products-db:27017
+    depends_on:
+      - products-db
+    networks:
+      - app
+
+  lb:
+    image: nginx:alpine
+    volumes:
+      - ./lb/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - users-service
+      - products-service
+    networks:
+      - app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - lb
+    networks:
+      - app
+
+networks:
+  app:
+    driver: bridge
+
+volumes:
+  users-db-data:
+  products-db-data:
