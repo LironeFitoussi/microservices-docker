@@ -4,9 +4,9 @@ const { MongoClient, ObjectId } = require('mongodb');
 const app = express();
 app.use(express.json());
 
-const port = 3000;
+const port = parseInt(process.env.PORT, 10) || 3000;
 const serviceName = 'products-service';
-const mongoUri = process.env.MONGO_URI || 'mongodb://products-db:27017';
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const dbName = 'productsdb';
 
 let mongoClient;
