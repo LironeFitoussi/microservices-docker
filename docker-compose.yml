@@ -4,14 +4,14 @@ services:
     volumes:
       - users-db-data:/data/db
     networks:
-      - app
+      - users-net
 
   products-db:
     image: mongo:7
     volumes:
       - products-db-data:/data/db
     networks:
-      - app
+      - products-net
 
   users-service:
     build: ./services/users-service
@@ -20,7 +20,8 @@ services:
     depends_on:
       - users-db
     networks:
-      - app
+      - users-net
+      - edge-net
 
   products-service:
     build: ./services/products-service
@@ -29,7 +30,8 @@ services:
     depends_on:
       - products-db
     networks:
-      - app
+      - products-net
+      - edge-net
 
   lb:
     image: nginx:alpine
@@ -39,7 +41,8 @@ services:
       - users-service
       - products-service
     networks:
-      - app
+      - edge-net
+      - public-net
 
   frontend:
     build: ./frontend
@@ -48,10 +51,19 @@ services:
     depends_on:
       - lb
     networks:
-      - app
+      - public-net
 
 networks:
-  app:
+  users-net:
+    driver: bridge
+    internal: true
+  products-net:
+    driver: bridge
+    internal: true
+  edge-net:
+    driver: bridge
+    internal: true
+  public-net:
     driver: bridge
 
 volumes:

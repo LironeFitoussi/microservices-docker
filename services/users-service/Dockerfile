@@ -1,11 +1,12 @@
-FROM node:20-alpine
-
+FROM node:20-alpine AS build
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm install --omit=dev
-
 COPY server.js ./
 
+FROM gcr.io/distroless/nodejs20-debian12:nonroot
+WORKDIR /app
+COPY --from=build --chown=nonroot:nonroot /app /app
+USER nonroot
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["server.js"]
